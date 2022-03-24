@@ -24,6 +24,13 @@ android {
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
             }
+
+            create("play") {
+                storeFile = rootProject.file(keystoreProperties["storeFile"]!!)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["uploadKeyAlias"] as String
+                keyPassword = keystoreProperties["uploadKeyPassword"] as String
+            }
         }
     }
 
@@ -33,11 +40,9 @@ android {
     defaultConfig {
         applicationId = "app.grapheneos.camera"
         minSdk = 29
-        targetSdk = 31
-        versionCode = 10
+        targetSdk = 32
+        versionCode = 16
         versionName = versionCode.toString()
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -47,6 +52,14 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (useKeystoreProperties) {
                 signingConfig = signingConfigs.getByName("release")
+            }
+        }
+
+        create("play") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".play"
+            if (useKeystoreProperties) {
+                signingConfig = signingConfigs.getByName("play")
             }
         }
     }
@@ -66,16 +79,13 @@ dependencies {
     implementation("com.google.android.material:material:1.5.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.3")
     implementation("androidx.exifinterface:exifinterface:1.3.3")
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.3")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.4.0")
 
-    implementation("androidx.camera:camera-core:1.1.0-beta01")
-    implementation("androidx.camera:camera-camera2:1.1.0-beta01")
-    implementation("androidx.camera:camera-lifecycle:1.1.0-beta01")
-    implementation("androidx.camera:camera-video:1.1.0-beta01")
-    implementation("androidx.camera:camera-view:1.1.0-beta01")
-    implementation("androidx.camera:camera-extensions:1.1.0-beta01")
+    implementation("androidx.camera:camera-core:1.1.0-beta02")
+    implementation("androidx.camera:camera-camera2:1.1.0-beta02")
+    implementation("androidx.camera:camera-lifecycle:1.1.0-beta02")
+    implementation("androidx.camera:camera-video:1.1.0-beta02")
+    implementation("androidx.camera:camera-view:1.1.0-beta02")
+    implementation("androidx.camera:camera-extensions:1.1.0-beta02")
 
     implementation("com.google.zxing:core:3.4.1")
 }
