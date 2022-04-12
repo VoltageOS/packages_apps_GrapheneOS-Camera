@@ -44,10 +44,23 @@ import app.grapheneos.camera.ui.activities.VideoOnlyActivity
 import com.google.zxing.BarcodeFormat
 import java.util.concurrent.Executors
 import android.widget.Button
+import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.Quality
 import app.grapheneos.camera.ui.activities.CaptureActivity
 import app.grapheneos.camera.ui.activities.MainActivity.Companion.camConfig
 import androidx.documentfile.provider.DocumentFile
+
+// work around https://issuetracker.google.com/issues/222726805
+private fun ExtensionsManager.isExtensionAvailableSafe(
+    cameraSelector: CameraSelector,
+    extensionMode: Int
+): Boolean {
+    try {
+        return isExtensionAvailable(cameraSelector, extensionMode)
+    } catch (e: AbstractMethodError) {
+        return false
+    }
+}
 
 @SuppressLint("ApplySharedPref")
 class CamConfig(private val mActivity: MainActivity) {
@@ -259,6 +272,11 @@ class CamConfig(private val mActivity: MainActivity) {
             return field ||
                     mActivity is VideoCaptureActivity ||
                     mActivity is VideoOnlyActivity
+        }
+
+    val canTakePicture : Boolean
+        get() {
+            return imageCapture != null
         }
 
     var isQRMode = false
@@ -816,8 +834,10 @@ class CamConfig(private val mActivity: MainActivity) {
 
             if (!modePref.contains(videoQualityKey)) {
                 mActivity.settingsDialog.reloadQualities()
-                val option = mActivity.settingsDialog.videoQualitySpinner.selectedItem as String
-                sEditor.putString(videoQualityKey, option)
+                val option = mActivity.settingsDialog.videoQualitySpinner.selectedItem as String?
+                option.let {
+                    sEditor.putString(videoQualityKey, option)
+                }
             } else {
                 modePref.getString(videoQualityKey, null)?.let {
                     mActivity.settingsDialog.reloadQualities(it)
@@ -1160,7 +1180,7 @@ class CamConfig(private val mActivity: MainActivity) {
         // Unbind/close all other camera(s) [if any]
         cameraProvider!!.unbindAll()
 
-        if (extensionsManager.isExtensionAvailable(cameraSelector, extensionMode)) {
+        if (extensionsManager.isExtensionAvailableSafe(cameraSelector, extensionMode)) {
             cameraSelector = extensionsManager.getExtensionEnabledCameraSelector(
                 cameraSelector, extensionMode
             )
@@ -1198,8 +1218,12 @@ class CamConfig(private val mActivity: MainActivity) {
 
                 videoCapture =
                     VideoCapture.withOutput(
-                        Recorder.Builder()
-                            .setQualitySelector(QualitySelector.from(videoQuality!!))
+                        Recorder.Builder().setQualitySelector(
+                            QualitySelector.from(
+                                videoQuality!!,
+                                FallbackStrategy.lowerQualityOrHigherThan(videoQuality!!)
+                            )
+                        )
                             .build()
                     )
 
@@ -1250,10 +1274,27 @@ class CamConfig(private val mActivity: MainActivity) {
 
         mActivity.forceUpdateOrientationSensor()
 
-        camera = cameraProvider!!.bindToLifecycle(
-            mActivity, cameraSelector,
-            useCaseGroupBuilder.build()
-        )
+        try {
+            camera = cameraProvider!!.bindToLifecycle(
+                mActivity, cameraSelector,
+                useCaseGroupBuilder.build()
+            )
+        } catch (exception : IllegalArgumentException) {
+            if (isVideoMode) {
+                val newUseCaseGroupBuilder = UseCaseGroup.Builder()
+                newUseCaseGroupBuilder.addUseCase(videoCapture!!)
+                newUseCaseGroupBuilder.addUseCase(preview!!)
+                imageCapture = null
+
+                camera = cameraProvider!!.bindToLifecycle(
+                    mActivity, cameraSelector,
+                    newUseCaseGroupBuilder.build()
+                )
+
+            } else {
+                throw exception
+            }
+        }
 
         loadTabs()
 
@@ -1395,7 +1436,7 @@ class CamConfig(private val mActivity: MainActivity) {
             modes.add(CameraModes.QR_SCAN)
         }
 
-        if (extensionsManager.isExtensionAvailable(
+        if (extensionsManager.isExtensionAvailableSafe(
                 cameraSelector,
                 ExtensionMode.NIGHT
             )
@@ -1403,7 +1444,7 @@ class CamConfig(private val mActivity: MainActivity) {
             modes.add(CameraModes.NIGHT_SIGHT)
         }
 
-        if (extensionsManager.isExtensionAvailable(
+        if (extensionsManager.isExtensionAvailableSafe(
                 cameraSelector,
                 ExtensionMode.BOKEH
             )
@@ -1411,7 +1452,7 @@ class CamConfig(private val mActivity: MainActivity) {
             modes.add(CameraModes.PORTRAIT)
         }
 
-        if (extensionsManager.isExtensionAvailable(
+        if (extensionsManager.isExtensionAvailableSafe(
                 cameraSelector,
                 ExtensionMode.HDR
             )
@@ -1419,7 +1460,7 @@ class CamConfig(private val mActivity: MainActivity) {
             modes.add(CameraModes.HDR)
         }
 
-        if (extensionsManager.isExtensionAvailable(
+        if (extensionsManager.isExtensionAvailableSafe(
                 cameraSelector,
                 ExtensionMode.FACE_RETOUCH
             )
